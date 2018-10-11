@@ -306,11 +306,23 @@ static struct fsl_ssi_soc_data fsl_ssi_imx51 = {
 		CCSR_SSI_SISR_TUE0 | CCSR_SSI_SISR_TUE1,
 };
 
+#ifdef CONFIG_IWG15
+static struct fsl_ssi_soc_data fsl_ssi_imx6q = {
+	.imx = true,
+	.offline_config = false,
+	.sisr_write_mask = CCSR_SSI_SISR_ROE0 | CCSR_SSI_SISR_ROE1 |
+		CCSR_SSI_SISR_TUE0 | CCSR_SSI_SISR_TUE1,
+};
+#endif
+
 static const struct of_device_id fsl_ssi_ids[] = {
 	{ .compatible = "fsl,mpc8610-ssi", .data = &fsl_ssi_mpc8610 },
 	{ .compatible = "fsl,imx51-ssi", .data = &fsl_ssi_imx51 },
 	{ .compatible = "fsl,imx35-ssi", .data = &fsl_ssi_imx35 },
 	{ .compatible = "fsl,imx21-ssi", .data = &fsl_ssi_imx21 },
+#ifdef CONFIG_IWG15
+	{ .compatible = "fsl,imx6q-ssi", .data = &fsl_ssi_imx6q},
+#endif
 	{}
 };
 MODULE_DEVICE_TABLE(of, fsl_ssi_ids);
@@ -1171,12 +1183,19 @@ static const struct snd_soc_component_driver fsl_ssi_component = {
 };
 
 static struct snd_soc_dai_driver fsl_ssi_ac97_dai = {
+#ifdef CONFIG_IWG15
+	.probe = fsl_ssi_dai_probe,
+#endif
 	.bus_control = true,
 	.playback = {
 		.stream_name = "AC97 Playback",
 		.channels_min = 2,
 		.channels_max = 2,
+#ifdef CONFIG_IWG15
+		.rates = SNDRV_PCM_RATE_48000,
+#else
 		.rates = SNDRV_PCM_RATE_8000_48000,
+#endif
 		.formats = SNDRV_PCM_FMTBIT_S16_LE,
 	},
 	.capture = {
@@ -1198,6 +1217,9 @@ static void fsl_ssi_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
 	struct regmap *regs = fsl_ac97_data->regs;
 	unsigned int lreg;
 	unsigned int lval;
+#ifdef CONFIG_IWG15
+	unsigned int temp;
+#endif
 
 	if (reg > 0x7f)
 		return;
@@ -1209,8 +1231,15 @@ static void fsl_ssi_ac97_write(struct snd_ac97 *ac97, unsigned short reg,
 	lval = val << 4;
 	regmap_write(regs, CCSR_SSI_SACDAT, lval);
 
+#ifdef CONFIG_IWG15
+	regmap_read(regs, CCSR_SSI_SACNT, &temp);
+	temp &= ~CCSR_SSI_SACNT_RDWR_MASK;
+	temp |=CCSR_SSI_SACNT_WR;
+	regmap_write(regs, CCSR_SSI_SACNT, temp);
+#else
 	regmap_update_bits(regs, CCSR_SSI_SACNT, CCSR_SSI_SACNT_RDWR_MASK,
 			CCSR_SSI_SACNT_WR);
+#endif
 	udelay(100);
 }
 
@@ -1222,11 +1251,22 @@ static unsigned short fsl_ssi_ac97_read(struct snd_ac97 *ac97,
 	unsigned short val = -1;
 	u32 reg_val;
 	unsigned int lreg;
+#ifdef CONFIG_IWG15
+	unsigned int temp;
+#endif
 
 	lreg = (reg & 0x7f) <<  12;
 	regmap_write(regs, CCSR_SSI_SACADD, lreg);
+
+#ifdef CONFIG_IWG15
+	regmap_read(regs, CCSR_SSI_SACNT, &temp);
+	temp &= ~CCSR_SSI_SACNT_RDWR_MASK;
+	temp |=CCSR_SSI_SACNT_RD;
+	regmap_write(regs, CCSR_SSI_SACNT, temp);
+#else
 	regmap_update_bits(regs, CCSR_SSI_SACNT, CCSR_SSI_SACNT_RDWR_MASK,
 			CCSR_SSI_SACNT_RD);
+#endif
 
 	udelay(100);
 
@@ -1289,6 +1329,10 @@ static int fsl_ssi_imx_probe(struct platform_device *pdev,
 	if (IS_ERR(ssi_private->baudclk))
 		dev_dbg(&pdev->dev, "could not get baud clock: %ld\n",
 			 PTR_ERR(ssi_private->baudclk));
+#ifdef CONFIG_IWG15
+	else
+		clk_prepare_enable(ssi_private->baudclk);
+#endif
 
 	/*
 	 * We have burstsize be "fifo_depth - 2" to match the SSI

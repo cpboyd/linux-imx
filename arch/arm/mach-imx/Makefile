@@ -43,6 +43,7 @@ AFLAGS_imx6sll_low_power_idle.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SOC_IMX6SLL) += cpuidle-imx6sll.o imx6sll_low_power_idle.o
 AFLAGS_imx7d_low_power_idle.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SOC_IMX7D) += cpuidle-imx7d.o imx7d_low_power_idle.o
+obj-$(CONFIG_IWG15) += mach-iwg15.o
 endif
 
 ifdef CONFIG_SND_IMX_SOC
